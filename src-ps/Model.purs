@@ -6,7 +6,7 @@ import Data.DateTime (DateTime(..), Time(..), canonicalDate)
 import Data.Either (Either(..))
 import Data.Enum (toEnum)
 import Data.Maybe (Maybe(..))
-import Data.Refined (Refined, RefinedError(..), SizeEqualTo, refine)
+import Data.Refined (Refined, RefinedError(..), SizeEqualTo)
 import Data.Refined.Predicate (class Predicate)
 import Data.Typelevel.Num (D4)
 import Prelude ((<$>), (<*>))
@@ -43,9 +43,6 @@ aDateTime =
     time = Time <$> toEnum 0 <*> toEnum 0 <*> toEnum 0 <*> toEnum 0
   in
      DateTime <$> date <*> time
-
-extent :: Either (RefinedError (Array (Maybe DateTime))) TemporalExtent
-extent = refine [Nothing, aDateTime]
 
 type Interval = {
     interval :: Array TemporalExtent

@@ -9,7 +9,8 @@ You can edit this file as you like.
                  , "affjax"
                  , "argonaut"
                  , "datetime" 
-                 , "refined" ]
+                 , "refined"
+                 , "test-unit" ]
 , packages = ./packages.dhall
 , sources = [ "src-ps/**/*.purs", "test-ps/**/*.purs" ]
 }
