@@ -1,15 +1,14 @@
 module Model where
 
-import Data.Argonaut (Json)
-import Data.Date (Month(..))
-import Data.DateTime (DateTime(..), Time(..), canonicalDate)
+import Data.Argonaut (class DecodeJson, Json, JsonDecodeError(..), toString)
+import Data.DateTime (DateTime)
 import Data.Either (Either(..))
-import Data.Enum (toEnum)
 import Data.Maybe (Maybe(..))
 import Data.Refined (Refined, RefinedError(..), SizeEqualTo)
 import Data.Refined.Predicate (class Predicate)
+import Data.String (toLower)
 import Data.Typelevel.Num (D4)
-import Prelude ((<$>), (<*>))
+import Prelude (($), (<$>))
 
 -- predicate requiring at least one non-Nothing item in a list of two items
 -- implies SizeEqualTo D2, but I don't know how to tell the compiler that
@@ -28,21 +27,22 @@ data StacProviderRole =
   | Processor
   | Host
 
+instance decodeStacProviderRole :: DecodeJson StacProviderRole where
+  decodeJson js = case toLower <$> toString js of
+    Just "licensor" -> Right Licensor
+    Just "producer" -> Right Producer
+    Just "processor" -> Right Processor
+    Just "host" -> Right Host
+    Just _ -> Left $ UnexpectedValue js
+    Nothing -> Left $ TypeMismatch ("Expected a JSON String")
+
 type TwoDimBbox = Refined (SizeEqualTo D4) (Array Number)
 
 type SpatialExtent = {
     bbox :: Array TwoDimBbox
 }
 
-type TemporalExtent = Refined (OneOrBoth DateTime) (Array (Maybe DateTime))
-
-aDateTime :: Maybe DateTime
-aDateTime = 
-  let
-    date = canonicalDate <$> toEnum 2021 <*> Just January <*> toEnum 1
-    time = Time <$> toEnum 0 <*> toEnum 0 <*> toEnum 0 <*> toEnum 0
-  in
-     DateTime <$> date <*> time
+type TemporalExtent = Refined (OneOrBoth JsonDate) (Array (Maybe JsonDate))
 
 type Interval = {
     interval :: Array TemporalExtent

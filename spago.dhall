@@ -8,7 +8,8 @@ You can edit this file as you like.
                  , "psci-support"
                  , "affjax"
                  , "argonaut"
-                 , "datetime" 
+                 , "datetime"
+                 , "js-date"
                  , "refined"
                  , "test-unit" ]
 , packages = ./packages.dhall
