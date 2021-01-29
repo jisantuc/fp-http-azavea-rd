@@ -11,7 +11,8 @@ import Prelude (bind, pure, ($), (<>))
 
 getCollections :: String -> Aff (Either Error (Array StacCollection))
 getCollections apiHost = do
-  resp <- AX.request $
-          defaultRequest { url = apiHost <> "/collections", responseFormat = ResponseFormat.json }
+  resp <-
+    AX.request
+      $ defaultRequest { url = apiHost <> "/collections", responseFormat = ResponseFormat.json }
   -- pure $ toStacCollection resp.body
   undefined

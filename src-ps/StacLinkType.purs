@@ -1,33 +1,32 @@
 module StacLinkType where
 
 import Prelude
-
 import Data.Argonaut (class DecodeJson, JsonDecodeError(..), toString)
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
 
-data StacLinkType =
-  Self                                   
-  | StacRoot                               
-  | Parent                                 
-  | Child                                  
-  | Item                                   
-  | Items                                  
-  | Source                                 
-  | Collection                             
-  | License                                
-  | Alternate                              
-  | DescribedBy                            
-  | Next                                   
-  | Prev                                   
-  | ServiceDesc                            
-  | ServiceDoc                             
-  | Conformance                            
-  | Data                                   
-  | LatestVersion                          
-  | PredecessorVersion                     
-  | SuccessorVersion                       
-  | DerivedFrom                            
+data StacLinkType
+  = Self
+  | StacRoot
+  | Parent
+  | Child
+  | Item
+  | Items
+  | Source
+  | Collection
+  | License
+  | Alternate
+  | DescribedBy
+  | Next
+  | Prev
+  | ServiceDesc
+  | ServiceDoc
+  | Conformance
+  | Data
+  | LatestVersion
+  | PredecessorVersion
+  | SuccessorVersion
+  | DerivedFrom
   | VendorLinkType String
 
 instance decodeStacLinkType :: DecodeJson StacLinkType where
