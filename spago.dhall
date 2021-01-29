@@ -9,7 +9,7 @@ You can edit this file as you like.
                  , "affjax"
                  , "argonaut"
                  , "datetime"
-                 , "js-date"
+                 , "formatters"
                  , "refined"
                  , "test-unit" ]
 , packages = ./packages.dhall

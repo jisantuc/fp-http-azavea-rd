@@ -1,28 +1,29 @@
 module Model where
 
-import Data.Argonaut (class DecodeJson, Json, JsonDecodeError(..), toString)
-import Data.DateTime (DateTime)
+import Data.Argonaut (class DecodeJson, Json, JsonDecodeError(..), decodeJson, toObject, toString, (.:))
 import Data.Either (Either(..))
+import Data.Foldable (elem)
+import Data.Map (Map, filterKeys)
 import Data.Maybe (Maybe(..))
-import Data.Refined (Refined, RefinedError(..), SizeEqualTo)
-import Data.Refined.Predicate (class Predicate)
+import Data.Refined (class Predicate, Refined, RefinedError(..))
+import Data.Set as Set
 import Data.String (toLower)
-import Data.Typelevel.Num (D4)
-import Prelude (($), (<$>))
+import JsonDate (JsonDate)
+import Prelude (bind, not, pure, ($), (<$>), (>>=))
+import StacLinkType (StacLinkType)
 
 -- predicate requiring at least one non-Nothing item in a list of two items
 -- implies SizeEqualTo D2, but I don't know how to tell the compiler that
 data OneOrBoth a
 
 instance predicateOneOrBoth :: Predicate (OneOrBoth p) (Array (Maybe x)) where
-  validate _ arr =
-    case arr of
-      [Just _, _] -> Right arr
-      [_, Just _] -> Right arr
-      _ -> Left NotError
+  validate _ arr = case arr of
+    [ Just _, _ ] -> Right arr
+    [ _, Just _ ] -> Right arr
+    _ -> Left NotError
 
-data StacProviderRole =
-  Licensor
+data StacProviderRole
+  = Licensor
   | Producer
   | Processor
   | Host
@@ -36,75 +37,134 @@ instance decodeStacProviderRole :: DecodeJson StacProviderRole where
     Just _ -> Left $ UnexpectedValue js
     Nothing -> Left $ TypeMismatch ("Expected a JSON String")
 
-type TwoDimBbox = Refined (SizeEqualTo D4) (Array Number)
+newtype TwoDimBbox
+  = TwoDimBbox
+  { llx :: Number
+  , lly :: Number
+  , urx :: Number
+  , ury :: Number
+  }
 
-type SpatialExtent = {
-    bbox :: Array TwoDimBbox
-}
+instance decodeTwoDimBbox :: DecodeJson TwoDimBbox where
+  decodeJson js =
+    decodeJson js
+      >>= ( \x -> case x of
+            [ llx, lly, urx, ury ] -> Right $ TwoDimBbox { llx, lly, urx, ury }
+            _ -> Left $ UnexpectedValue js
+        )
 
-type TemporalExtent = Refined (OneOrBoth JsonDate) (Array (Maybe JsonDate))
+type SpatialExtent
+  = { bbox :: Array TwoDimBbox
+    }
 
-type Interval = {
-    interval :: Array TemporalExtent
-}
+type TemporalExtent
+  = Refined (OneOrBoth JsonDate) (Array (Maybe JsonDate))
 
-type StacExtent = {
-    spatial :: SpatialExtent,
-    temporal :: Interval
-}
+type Interval
+  = { interval :: Array TemporalExtent
+    }
 
-type StacProvider = {
-    name :: String,
-    description :: Maybe String,
-    roles :: Array StacProviderRole,
-    url :: Maybe String
-}
+type StacExtent
+  = { spatial :: SpatialExtent
+    , temporal :: Interval
+    }
 
-data StacLinkType =
-  Self                                   
-  | StacRoot                               
-  | Parent                                 
-  | Child                                  
-  | Item                                   
-  | Items                                  
-  | Source                                 
-  | Collection                             
-  | License                                
-  | Alternate                              
-  | DescribedBy                            
-  | Next                                   
-  | Prev                                   
-  | ServiceDesc                            
-  | ServiceDoc                             
-  | Conformance                            
-  | Data                                   
-  | LatestVersion                          
-  | PredecessorVersion                     
-  | SuccessorVersion                       
-  | DerivedFrom                            
-  | VendorLinkType String
+type StacProvider
+  = { name :: String
+    , description :: Maybe String
+    , roles :: Array StacProviderRole
+    , url :: Maybe String
+    }
 
-type StacLink = {
-  href :: String,
-  rel :: StacLinkType,
-  _type :: Maybe String,
-  title :: Maybe String,
-  extensionFields :: Json
-}
+newtype StacLink
+  = StacLink
+  { href :: String
+  , rel :: StacLinkType
+  , _type :: Maybe String
+  , title :: Maybe String
+  , extensionFields :: Map String Json
+  }
 
-type StacCollection = {
-    stacVersion :: String,
-    stacExtensions :: Array String,
-    id :: String,
-    title :: Maybe String,
-    description :: String,
-    keywords :: Array String,
-    license :: String,
-    providers :: Array StacProvider,
-    extent :: StacExtent,
-    summaries :: Json,
-    properties :: Json,
-    links :: Array StacLink,
-    extensionFields :: Json
-}
+instance decodeStacLink :: DecodeJson StacLink where
+  decodeJson js = case toObject js of
+    Just obj ->
+      let
+        fields = Set.fromFoldable [ "href", "rel", "type", "title" ]
+      in
+        do
+          href <- obj .: "href"
+          rel <- obj .: "rel"
+          _type <- obj .: "type"
+          title <- obj .: "title"
+          extensionFields <- filterKeys (\key -> not $ elem key fields) <$> decodeJson js
+          pure $ StacLink { href, rel, _type, title, extensionFields }
+    Nothing -> Left $ TypeMismatch "Expected a JSON object"
 
+newtype StacCollection
+  = StacCollection
+  { stacVersion :: String
+  , stacExtensions :: Array String
+  , id :: String
+  , title :: Maybe String
+  , description :: String
+  , keywords :: Array String
+  , license :: String
+  , providers :: Array StacProvider
+  , extent :: StacExtent
+  , summaries :: Json
+  , properties :: Json
+  , links :: Array StacLink
+  , extensionFields :: Map String Json
+  }
+
+instance decodeStacCollection :: DecodeJson StacCollection where
+  decodeJson js =
+    let
+      fields =
+        Set.fromFoldable
+          [ "stac_version"
+          , "stac_extensions"
+          , "id"
+          , "title"
+          , "description"
+          , "keywords"
+          , "license"
+          , "providers"
+          , "extent"
+          , "summaries"
+          , "properties"
+          , "links"
+          ]
+    in
+      case toObject js of
+        Just js -> do
+          stacVersion <- js .: "stac_version"
+          stacExtensions <- js .: "stac_extensions"
+          id <- js .: "id"
+          title <- js .: "title"
+          description <- js .: "description"
+          keywords <- js .: "keywords"
+          license <- js .: "providers"
+          providers <- js .: "providers"
+          extent <- js .: "extent"
+          summaries <- js .: "summaries"
+          properties <- js .: "properties"
+          links <- js .: "links"
+          extensionFields <- filterKeys (\key -> not $ elem key fields) <$> decodeJson properties
+          pure
+            $ StacCollection
+                { stacVersion
+                , stacExtensions
+                , id
+                , title
+                , description
+                , keywords
+                , license
+                , providers
+                , extent
+                , summaries
+                , properties
+                , links
+                , extensionFields
+                }
+        Nothing -> Left $ UnexpectedValue js
