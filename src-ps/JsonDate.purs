@@ -1,9 +1,9 @@
 module JsonDate (JsonDate(..), fromString) where
 
 import Data.Formatter.DateTime
-import Codec (leftMap)
 import Data.Argonaut (class DecodeJson, JsonDecodeError(..), toString)
 import Data.Array (foldl, snoc, uncons)
+import Data.Bifunctor (lmap)
 import Data.DateTime (DateTime)
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
@@ -37,5 +37,5 @@ fromString s = JsonDate <$> (unformatDateTime "YYYY-MM-DDTHH:mm:SS" <<< dropTz) 
 
 instance decodeJsonDate :: DecodeJson JsonDate where
   decodeJson js = case toString js of
-    Just s -> leftMap adaptParseError $ fromString s
+    Just s -> lmap adaptParseError $ fromString s
     Nothing -> Left $ TypeMismatch "Expected a JSON string"
