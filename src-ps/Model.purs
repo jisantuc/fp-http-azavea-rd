@@ -1,6 +1,7 @@
 module Model where
 
-import Data.Argonaut (class DecodeJson, Json, JsonDecodeError(..), decodeJson, toObject, toString, (.:))
+import Data.Argonaut (class DecodeJson, class EncodeJson, Json, JsonDecodeError(..), decodeJson, encodeJson, toObject, toString, (.:))
+import Data.Array.NonEmpty (cons', toNonEmpty)
 import Data.Either (Either(..))
 import Data.Foldable (elem)
 import Data.Map (Map, filterKeys)
@@ -9,8 +10,10 @@ import Data.Refined (class Predicate, Refined, RefinedError(..))
 import Data.Set as Set
 import Data.String (toLower)
 import JsonDate (JsonDate)
-import Prelude (bind, not, pure, ($), (<$>), (>>=))
+import Prelude (class Eq, class Show, bind, not, pure, show, ($), (+), (<$>), (<<<), (>>=))
 import StacLinkType (StacLinkType)
+import Test.QuickCheck (class Arbitrary, arbitrary)
+import Test.QuickCheck.Gen (oneOf)
 
 -- predicate requiring at least one non-Nothing item in a list of two items
 -- implies SizeEqualTo D2, but I don't know how to tell the compiler that
@@ -28,6 +31,15 @@ data StacProviderRole
   | Processor
   | Host
 
+derive instance eqStacProviderRole :: Eq StacProviderRole
+
+instance showStacProviderRole :: Show StacProviderRole where
+  show role = case role of
+    Licensor -> "licensor"
+    Producer -> "producer"
+    Processor -> "processor"
+    Host -> "host"
+
 instance decodeStacProviderRole :: DecodeJson StacProviderRole where
   decodeJson js = case toLower <$> toString js of
     Just "licensor" -> Right Licensor
@@ -37,6 +49,21 @@ instance decodeStacProviderRole :: DecodeJson StacProviderRole where
     Just _ -> Left $ UnexpectedValue js
     Nothing -> Left $ TypeMismatch ("Expected a JSON String")
 
+instance encodeStacProviderRole :: EncodeJson StacProviderRole where
+  encodeJson = encodeJson <<< show
+
+instance arbitraryStacProviderRole :: Arbitrary StacProviderRole where
+  arbitrary =
+    oneOf $ pure
+      <$> toNonEmpty
+          ( Licensor
+              `cons'`
+                [ Producer
+                , Processor
+                , Host
+                ]
+          )
+
 newtype TwoDimBbox
   = TwoDimBbox
   { llx :: Number
@@ -44,6 +71,11 @@ newtype TwoDimBbox
   , urx :: Number
   , ury :: Number
   }
+
+derive instance eqTwoDimBbox :: Eq TwoDimBbox
+
+instance showTwoDimBbox :: Show TwoDimBbox where
+  show (TwoDimBbox { llx, lly, urx, ury }) = show [ llx, lly, urx, ury ]
 
 instance decodeTwoDimBbox :: DecodeJson TwoDimBbox where
   decodeJson js =
@@ -53,12 +85,26 @@ instance decodeTwoDimBbox :: DecodeJson TwoDimBbox where
             _ -> Left $ UnexpectedValue js
         )
 
+instance encodeTwoDimBbox :: EncodeJson TwoDimBbox where
+  encodeJson (TwoDimBbox { llx, lly, urx, ury }) = encodeJson [ llx, lly, urx, ury ]
+
+instance arbitraryTwoDimBbox :: Arbitrary TwoDimBbox where
+  arbitrary = do
+    llx <- arbitrary
+    lly <- arbitrary
+    let
+      urx = llx + 5.0
+
+      ury = lly + 5.0
+    pure $ TwoDimBbox { llx, lly, urx, ury }
+
 type SpatialExtent
   = { bbox :: Array TwoDimBbox
     }
 
-type TemporalExtent
-  = Refined (OneOrBoth JsonDate) (Array (Maybe JsonDate))
+-- TODO: handwrite json and arbitrary instances, derive eq and show
+newtype TemporalExtent
+  = TemporalExtent (Refined (OneOrBoth JsonDate) (Array (Maybe JsonDate)))
 
 type Interval
   = { interval :: Array TemporalExtent

@@ -1,16 +1,19 @@
 module Test.Main where
 
 import Prelude
+import Data.Argonaut (class DecodeJson, class EncodeJson, decodeJson, encodeJson)
 import Data.Date (Month(..))
 import Data.DateTime (DateTime(..), Time(..), canonicalDate)
-import Data.Either (Either)
+import Data.Either (Either(..))
 import Data.Either as Either
 import Data.Enum (toEnum)
 import Data.Maybe (Maybe(..))
 import Data.Refined (RefinedError, refine)
 import Effect (Effect)
+import Effect.Class (liftEffect)
 import JsonDate (JsonDate(..))
-import Model (TemporalExtent)
+import Model (SpatialExtent, StacProviderRole, TwoDimBbox, TemporalExtent)
+import Test.QuickCheck (Result, quickCheck, (<?>))
 import Test.Unit (suite, test)
 import Test.Unit.Assert as Assert
 import Test.Unit.Main (runTest)
@@ -37,6 +40,11 @@ main = do
       test "Two items, Just in back -- ok"
         $ Assert.assert ""
         $ Either.isRight (refineTemporalExtent [ Nothing, dateTime ])
+    suite "Codec round trips" do
+      test "TwoDimBbox" $ liftEffect $ quickCheck (\(x :: TwoDimBbox) -> codecRoundTrip x)
+      test "StacProviderRole" $ liftEffect $ quickCheck (\(x :: StacProviderRole) -> codecRoundTrip x)
+      test "SpatialExtent" $ liftEffect $ quickCheck (\(x :: SpatialExtent) -> codecRoundTrip x)
+      test "TemporalExtent" $ liftEffect $ quickCheck (\(x :: TemporalExtent) -> codecRoundTrip x)
 
 refineTemporalExtent :: Array (Maybe JsonDate) -> Either (RefinedError (Array (Maybe JsonDate))) TemporalExtent
 refineTemporalExtent = refine
@@ -49,3 +57,12 @@ dateTime =
     time = Time <$> toEnum 0 <*> toEnum 0 <*> toEnum 0 <*> toEnum 0
   in
     JsonDate <$> (DateTime <$> date <*> time)
+
+codecRoundTrip :: forall a. Eq a => Show a => DecodeJson a => EncodeJson a => a -> Result
+codecRoundTrip a =
+  let
+    encoded = encodeJson a
+
+    decoded = decodeJson encoded
+  in
+    decoded == Right a <?> "Result: \n" <> show decoded <> "\nnot equal to expected:\n" <> show a
