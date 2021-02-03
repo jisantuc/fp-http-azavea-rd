@@ -6,7 +6,7 @@ import Data.Either (Either(..))
 import Data.Foldable (elem)
 import Data.Map (Map, filterKeys)
 import Data.Maybe (Maybe(..))
-import Data.Refined (class Predicate, Refined, RefinedError(..))
+import Data.Refined (class Predicate, Refined, RefinedError(..), unsafeRefine)
 import Data.Set as Set
 import Data.String (toLower)
 import JsonDate (JsonDate)
@@ -106,6 +106,33 @@ type SpatialExtent
 newtype TemporalExtent
   = TemporalExtent (Refined (OneOrBoth JsonDate) (Array (Maybe JsonDate)))
 
+derive newtype instance eqTemporalExtent :: Eq TemporalExtent
+
+derive newtype instance showTemporalExtent :: Show TemporalExtent
+
+instance decodeJsonTemporalExtent :: DecodeJson TemporalExtent where
+  decodeJson js = TemporalExtent <$> decodeJson js
+
+derive newtype instance encodeJsonTemporalExtent :: EncodeJson TemporalExtent
+
+instance arbitraryTemporalExtent :: Arbitrary TemporalExtent where
+  arbitrary = oneOf $ toNonEmpty $ emptyStartGen `cons'` [ emptyEndGen, bothEndpoints ]
+    where
+    emptyStartGen = do
+      start <- pure Nothing
+      end <- Just <$> arbitrary
+      pure $ TemporalExtent (unsafeRefine [ start, end ])
+
+    emptyEndGen = do
+      start <- Just <$> arbitrary
+      end <- pure Nothing
+      pure $ TemporalExtent (unsafeRefine [ start, end ])
+
+    bothEndpoints = do
+      start <- Just <$> arbitrary
+      end <- Just <$> arbitrary
+      pure $ TemporalExtent (unsafeRefine [ start, end ])
+
 type Interval
   = { interval :: Array TemporalExtent
     }
@@ -183,19 +210,19 @@ instance decodeStacCollection :: DecodeJson StacCollection where
           ]
     in
       case toObject js of
-        Just js -> do
-          stacVersion <- js .: "stac_version"
-          stacExtensions <- js .: "stac_extensions"
-          id <- js .: "id"
-          title <- js .: "title"
-          description <- js .: "description"
-          keywords <- js .: "keywords"
-          license <- js .: "providers"
-          providers <- js .: "providers"
-          extent <- js .: "extent"
-          summaries <- js .: "summaries"
-          properties <- js .: "properties"
-          links <- js .: "links"
+        Just jsObject -> do
+          stacVersion <- jsObject .: "stac_version"
+          stacExtensions <- jsObject .: "stac_extensions"
+          id <- jsObject .: "id"
+          title <- jsObject .: "title"
+          description <- jsObject .: "description"
+          keywords <- jsObject .: "keywords"
+          license <- jsObject .: "providers"
+          providers <- jsObject .: "providers"
+          extent <- jsObject .: "extent"
+          summaries <- jsObject .: "summaries"
+          properties <- jsObject .: "properties"
+          links <- jsObject .: "links"
           extensionFields <- filterKeys (\key -> not $ elem key fields) <$> decodeJson properties
           pure
             $ StacCollection

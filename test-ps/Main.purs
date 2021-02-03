@@ -12,7 +12,7 @@ import Data.Refined (RefinedError, refine)
 import Effect (Effect)
 import Effect.Class (liftEffect)
 import JsonDate (JsonDate(..))
-import Model (SpatialExtent, StacProviderRole, TwoDimBbox, TemporalExtent)
+import Model (SpatialExtent, StacProviderRole, TemporalExtent(..), TwoDimBbox)
 import Test.QuickCheck (Result, quickCheck, (<?>))
 import Test.Unit (suite, test)
 import Test.Unit.Assert as Assert
@@ -44,10 +44,11 @@ main = do
       test "TwoDimBbox" $ liftEffect $ quickCheck (\(x :: TwoDimBbox) -> codecRoundTrip x)
       test "StacProviderRole" $ liftEffect $ quickCheck (\(x :: StacProviderRole) -> codecRoundTrip x)
       test "SpatialExtent" $ liftEffect $ quickCheck (\(x :: SpatialExtent) -> codecRoundTrip x)
+      test "JsonDate" $ liftEffect $ quickCheck (\(x :: JsonDate) -> codecRoundTrip x)
       test "TemporalExtent" $ liftEffect $ quickCheck (\(x :: TemporalExtent) -> codecRoundTrip x)
 
 refineTemporalExtent :: Array (Maybe JsonDate) -> Either (RefinedError (Array (Maybe JsonDate))) TemporalExtent
-refineTemporalExtent = refine
+refineTemporalExtent arr = TemporalExtent <$> refine arr
 
 dateTime :: Maybe JsonDate
 dateTime =

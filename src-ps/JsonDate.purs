@@ -6,7 +6,8 @@ import Data.Bifunctor (lmap)
 import Data.DateTime (DateTime)
 import Data.DateTime.Gen (genDateTime)
 import Data.Either (Either(..))
-import Data.Formatter.DateTime (formatDateTime, unformatDateTime)
+import Data.Formatter.DateTime (Formatter, FormatterCommand(..), format, unformat, unformatDateTime)
+import Data.List (List(..), (:))
 import Data.Maybe (Maybe(..))
 import Data.String.CodeUnits (singleton, toCharArray)
 import Prelude (class Eq, class Show, ($), (<$>), (<<<), (<>))
@@ -40,12 +41,30 @@ adaptParseError :: String -> JsonDecodeError
 adaptParseError s = TypeMismatch $ "String should match YYYY-MM-DDTHH:mm:SS format: " <> s
 
 fromString :: String -> Either String JsonDate
-fromString s = JsonDate <$> (unformatDateTime "YYYY-MM-DDTHH:mm:SS" <<< dropTz) s
+fromString s = JsonDate <$> (unformat dateFormat <<< dropTz) s
+
+dateFormat :: Formatter
+dateFormat =
+  ( YearFull
+      : (Placeholder "-")
+      : MonthTwoDigits
+      : (Placeholder "-")
+      : DayOfMonthTwoDigits
+      : (Placeholder "T")
+      : Hours24
+      : (Placeholder ":")
+      : MinutesTwoDigits
+      : (Placeholder ":")
+      : SecondsTwoDigits
+      : (Placeholder ".")
+      : Milliseconds
+      : Nil
+  )
 
 instance decodeJsonDate :: DecodeJson JsonDate where
   decodeJson js = case toString js of
     Just s -> lmap adaptParseError $ fromString s
-    Nothing -> Left $ TypeMismatch "Expected a JSON string"
+    Nothing -> Left $ UnexpectedValue js
 
 instance encodeJsonDate :: EncodeJson JsonDate where
-  encodeJson (JsonDate dt) = encodeJson $ formatDateTime "YYYY-MM-DDTHH:mm:SS" dt
+  encodeJson (JsonDate dt) = encodeJson $ format dateFormat dt
