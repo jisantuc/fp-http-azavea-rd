@@ -1,0 +1,17 @@
+name: ci
+
+on:
+  pull_request:
+    branches:
+      - "*"
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up a PureScript toolchain
+        uses: purescript-contrib/setup-purescript@v1.1
+      - run: |
+        spago build
+        spago test
