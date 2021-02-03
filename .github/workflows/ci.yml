@@ -13,5 +13,5 @@ jobs:
       - name: Set up a PureScript toolchain
         uses: purescript-contrib/setup-purescript@v1.1
       - run: |
-        spago build
-        spago test
+          spago build
+          spago test
