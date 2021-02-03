@@ -1,7 +1,13 @@
 module StacLinkType where
 
 import Prelude
-import Data.Argonaut (class DecodeJson, JsonDecodeError(..), toString)
+import Data.Argonaut
+  ( class DecodeJson
+  , class EncodeJson
+  , JsonDecodeError(..)
+  , encodeJson
+  , toString
+  )
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
 
@@ -54,3 +60,30 @@ instance decodeStacLinkType :: DecodeJson StacLinkType where
     Just "derived_from" -> Right DerivedFrom
     Just s -> (Right <<< VendorLinkType) s
     Nothing -> (Left <<< UnexpectedValue) js
+
+instance encodeStacLinkType :: EncodeJson StacLinkType where
+  encodeJson stacLinkType =
+    encodeJson
+      $ case stacLinkType of
+          Self -> "self"
+          StacRoot -> "root"
+          Parent -> "parent"
+          Child -> "child"
+          Item -> "item"
+          Items -> "items"
+          Source -> "source"
+          Collection -> "collection"
+          License -> "license"
+          Alternate -> "alternate"
+          DescribedBy -> "describedBy"
+          Next -> "next"
+          Prev -> "prev"
+          ServiceDesc -> "service-desc"
+          ServiceDoc -> "service-doc"
+          Conformance -> "conformance"
+          Data -> "data"
+          LatestVersion -> "latest-version"
+          PredecessorVersion -> "predecessor-version"
+          SuccessorVersion -> "successor-version"
+          DerivedFrom -> "derived-from"
+          VendorLinkType s -> s

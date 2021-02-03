@@ -1,6 +1,6 @@
 module Model where
 
-import Data.Argonaut (class DecodeJson, class EncodeJson, Json, JsonDecodeError(..), decodeJson, encodeJson, toObject, toString, (.:))
+import Data.Argonaut (class DecodeJson, class EncodeJson, Json, JsonDecodeError(..), decodeJson, encodeJson, toObject, toString, (.:), (:=), (~>))
 import Data.Array.NonEmpty (cons', toNonEmpty)
 import Data.Either (Either(..))
 import Data.Foldable (elem)
@@ -172,6 +172,17 @@ instance decodeStacLink :: DecodeJson StacLink where
           extensionFields <- filterKeys (\key -> not $ elem key fields) <$> decodeJson js
           pure $ StacLink { href, rel, _type, title, extensionFields }
     Nothing -> Left $ TypeMismatch "Expected a JSON object"
+
+instance encodeJsonStacLink :: EncodeJson StacLink where
+  encodeJson (StacLink { href, rel, _type, title, extensionFields }) =
+    "href" := href
+      ~> "rel"
+      := rel
+      ~> "type"
+      := _type
+      ~> "title"
+      := title
+      ~> encodeJson extensionFields
 
 newtype StacCollection
   = StacCollection
