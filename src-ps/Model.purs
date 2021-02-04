@@ -1,19 +1,21 @@
 module Model where
 
-import Data.Argonaut (class DecodeJson, class EncodeJson, Json, JsonDecodeError(..), decodeJson, encodeJson, toObject, toString, (.:), (:=), (~>))
+import Control.Monad.Gen (elements)
+import Data.Argonaut (class DecodeJson, class EncodeJson, Json, JsonDecodeError(..), decodeJson, encodeJson, jsonZero, stringify, toObject, toString, (.:), (:=), (~>))
 import Data.Array.NonEmpty (cons', toNonEmpty)
 import Data.Either (Either(..))
-import Data.Foldable (elem)
-import Data.Map (Map, filterKeys)
+import Data.Foldable (elem, foldl, foldr)
+import Data.Map (Map, filterKeys, lookup, singleton)
+import Data.Map.Internal (keys)
 import Data.Maybe (Maybe(..))
 import Data.Refined (class Predicate, Refined, RefinedError(..), unsafeRefine)
 import Data.Set as Set
 import Data.String (toLower)
 import JsonDate (JsonDate)
-import Prelude (class Eq, class Show, bind, not, pure, show, ($), (+), (<$>), (<<<), (>>=))
+import Prelude (class Eq, class Show, apply, bind, map, not, pure, show, unit, ($), (+), (<$>), (<*>), (<<<), (>>=))
 import StacLinkType (StacLinkType)
 import Test.QuickCheck (class Arbitrary, arbitrary)
-import Test.QuickCheck.Gen (oneOf)
+import Test.QuickCheck.Gen (Gen, oneOf)
 
 -- predicate requiring at least one non-Nothing item in a list of two items
 -- implies SizeEqualTo D2, but I don't know how to tell the compiler that
@@ -54,8 +56,8 @@ instance encodeStacProviderRole :: EncodeJson StacProviderRole where
 
 instance arbitraryStacProviderRole :: Arbitrary StacProviderRole where
   arbitrary =
-    oneOf $ pure
-      <$> toNonEmpty
+    elements
+      $ toNonEmpty
           ( Licensor
               `cons'`
                 [ Producer
@@ -63,6 +65,22 @@ instance arbitraryStacProviderRole :: Arbitrary StacProviderRole where
                 , Host
                 ]
           )
+
+alphaStringGen :: Gen String
+alphaStringGen =
+  elements
+    $ toNonEmpty
+        ( "a" `cons'` [ "b", "c", "d", "e", "f", "g" ]
+        )
+
+encodeMap :: forall v. EncodeJson v => Map String v -> Json
+encodeMap m =
+  let
+    ks = keys m
+
+    encoded = (\k -> k := (encodeJson $ lookup k m)) <$> ks
+  in
+    foldr (~>) jsonZero encoded
 
 newtype TwoDimBbox
   = TwoDimBbox
@@ -158,6 +176,14 @@ newtype StacLink
   , extensionFields :: Map String Json
   }
 
+derive newtype instance eqStacLink :: Eq StacLink
+
+instance showStacLink :: Show StacLink where
+  show = stringify <<< encodeJson
+
+-- what's going wrong here?
+-- map decoder expects an array of k v pairs, while I'm encoding as top-level json properties
+-- what an adventure! i'll need to write a custom decoding function here
 instance decodeStacLink :: DecodeJson StacLink where
   decodeJson js = case toObject js of
     Just obj ->
@@ -182,7 +208,19 @@ instance encodeJsonStacLink :: EncodeJson StacLink where
       := _type
       ~> "title"
       := title
-      ~> encodeJson extensionFields
+      ~> encodeMap extensionFields
+
+instance arbitraryStacLink :: Arbitrary StacLink where
+  arbitrary = ado
+    href <- arbitrary
+    rel <- arbitrary
+    _type <- arbitrary
+    title <- arbitrary
+    extensionFields <-
+      singleton
+        <$> (alphaStringGen)
+        <*> (encodeJson <$> (arbitrary :: Gen Number))
+    in StacLink { href, rel, _type, title, extensionFields }
 
 newtype StacCollection
   = StacCollection
