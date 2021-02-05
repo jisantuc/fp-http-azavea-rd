@@ -1,21 +1,22 @@
 module Model where
 
+import Control.Apply (lift2)
 import Control.Monad.Gen (elements)
-import Data.Argonaut (class DecodeJson, class EncodeJson, Json, JsonDecodeError(..), decodeJson, encodeJson, jsonZero, stringify, toObject, toString, (.:), (:=), (~>))
+import Data.Argonaut (class DecodeJson, class EncodeJson, Json, JsonDecodeError(..), decodeJson, encodeJson, stringify, toObject, toString, (.:), (:=), (~>))
 import Data.Array.NonEmpty (cons', toNonEmpty)
 import Data.Either (Either(..))
-import Data.Foldable (elem, foldl, foldr)
-import Data.Map (Map, filterKeys, lookup, singleton)
-import Data.Map.Internal (keys)
+import Data.Foldable (elem)
 import Data.Maybe (Maybe(..))
 import Data.Refined (class Predicate, Refined, RefinedError(..), unsafeRefine)
 import Data.Set as Set
 import Data.String (toLower)
+import Foreign.Object (Object, filterKeys)
+import Foreign.Object.Gen (genForeignObject)
 import JsonDate (JsonDate)
-import Prelude (class Eq, class Show, apply, bind, map, not, pure, show, unit, ($), (+), (<$>), (<*>), (<<<), (>>=))
+import Prelude (class Eq, class Show, apply, bind, map, not, pure, show, ($), (+), (-), (<$>), (<<<), (<>), (>>=))
 import StacLinkType (StacLinkType)
 import Test.QuickCheck (class Arbitrary, arbitrary)
-import Test.QuickCheck.Gen (Gen, oneOf)
+import Test.QuickCheck.Gen (Gen, arrayOf, oneOf)
 
 -- predicate requiring at least one non-Nothing item in a list of two items
 -- implies SizeEqualTo D2, but I don't know how to tell the compiler that
@@ -66,21 +67,24 @@ instance arbitraryStacProviderRole :: Arbitrary StacProviderRole where
                 ]
           )
 
-alphaStringGen :: Gen String
-alphaStringGen =
-  elements
-    $ toNonEmpty
-        ( "a" `cons'` [ "b", "c", "d", "e", "f", "g" ]
-        )
+alphaStringGen :: Int -> Gen String
+alphaStringGen 0 = pure ""
 
-encodeMap :: forall v. EncodeJson v => Map String v -> Json
-encodeMap m =
+alphaStringGen n =
   let
-    ks = keys m
-
-    encoded = (\k -> k := (encodeJson $ lookup k m)) <$> ks
+    choice =
+      elements
+        $ toNonEmpty
+            ( "a" `cons'` [ "b", "c", "d", "e", "f", "g" ]
+            )
   in
-    foldr (~>) jsonZero encoded
+    lift2 (<>) choice (alphaStringGen (n - 1))
+
+jsObjectGen :: Gen (Object Json)
+jsObjectGen = genForeignObject (alphaStringGen 12) (encodeJson <$> (arbitrary :: Gen Number))
+
+maybe :: forall a. Gen a -> Gen (Maybe a)
+maybe g = oneOf $ toNonEmpty $ pure Nothing `cons'` [ Just <$> g ]
 
 newtype TwoDimBbox
   = TwoDimBbox
@@ -173,7 +177,7 @@ newtype StacLink
   , rel :: StacLinkType
   , _type :: Maybe String
   , title :: Maybe String
-  , extensionFields :: Map String Json
+  , extensionFields :: Object Json
   }
 
 derive newtype instance eqStacLink :: Eq StacLink
@@ -208,7 +212,7 @@ instance encodeJsonStacLink :: EncodeJson StacLink where
       := _type
       ~> "title"
       := title
-      ~> encodeMap extensionFields
+      ~> encodeJson extensionFields
 
 instance arbitraryStacLink :: Arbitrary StacLink where
   arbitrary = ado
@@ -216,10 +220,7 @@ instance arbitraryStacLink :: Arbitrary StacLink where
     rel <- arbitrary
     _type <- arbitrary
     title <- arbitrary
-    extensionFields <-
-      singleton
-        <$> (alphaStringGen)
-        <*> (encodeJson <$> (arbitrary :: Gen Number))
+    extensionFields <- jsObjectGen
     in StacLink { href, rel, _type, title, extensionFields }
 
 newtype StacCollection
@@ -236,10 +237,10 @@ newtype StacCollection
   , summaries :: Json
   , properties :: Json
   , links :: Array StacLink
-  , extensionFields :: Map String Json
+  , extensionFields :: Object Json
   }
 
-instance decodeStacCollection :: DecodeJson StacCollection where
+instance decodeJsonStacCollection :: DecodeJson StacCollection where
   decodeJson js =
     let
       fields =
@@ -266,13 +267,13 @@ instance decodeStacCollection :: DecodeJson StacCollection where
           title <- jsObject .: "title"
           description <- jsObject .: "description"
           keywords <- jsObject .: "keywords"
-          license <- jsObject .: "providers"
+          license <- jsObject .: "license"
           providers <- jsObject .: "providers"
           extent <- jsObject .: "extent"
           summaries <- jsObject .: "summaries"
           properties <- jsObject .: "properties"
           links <- jsObject .: "links"
-          extensionFields <- filterKeys (\key -> not $ elem key fields) <$> decodeJson properties
+          extensionFields <- filterKeys (\key -> not $ elem key fields) <$> decodeJson js
           pure
             $ StacCollection
                 { stacVersion
@@ -290,3 +291,82 @@ instance decodeStacCollection :: DecodeJson StacCollection where
                 , extensionFields
                 }
         Nothing -> Left $ UnexpectedValue js
+
+instance encodeJsonStacCollection :: EncodeJson StacCollection where
+  encodeJson ( StacCollection
+      { stacVersion
+    , stacExtensions
+    , id
+    , title
+    , description
+    , keywords
+    , license
+    , providers
+    , extent
+    , summaries
+    , properties
+    , links
+    , extensionFields
+    }
+  ) =
+    "stac_version" := stacVersion
+      ~> "stac_extensions"
+      := stacExtensions
+      ~> "id"
+      := id
+      ~> "title"
+      := title
+      ~> "description"
+      := description
+      ~> "keywords"
+      := keywords
+      ~> "license"
+      := license
+      ~> "providers"
+      := providers
+      ~> "extent"
+      := extent
+      ~> "summaries"
+      := summaries
+      ~> "properties"
+      := properties
+      ~> "links"
+      := links
+      ~> encodeJson extensionFields
+
+instance arbitraryStacCollection :: Arbitrary StacCollection where
+  arbitrary = do
+    stacVersion <- pure $ "1.0.0-beta.2"
+    stacExtensions <- pure $ []
+    id <- alphaStringGen 12
+    title <- maybe (alphaStringGen 12)
+    description <- alphaStringGen 12
+    keywords <- arrayOf (alphaStringGen 12)
+    license <- alphaStringGen 12
+    providers <- arrayOf arbitrary
+    extent <- (arbitrary :: Gen StacExtent)
+    summaries <- encodeJson <$> jsObjectGen
+    properties <- encodeJson <$> jsObjectGen
+    links <- arrayOf arbitrary
+    extensionFields <- jsObjectGen
+    pure
+      $ StacCollection
+          { stacVersion
+          , stacExtensions
+          , id
+          , title
+          , description
+          , keywords
+          , license
+          , providers
+          , extent
+          , summaries
+          , properties
+          , links
+          , extensionFields
+          }
+
+derive newtype instance eqStacCollection :: Eq StacCollection
+
+instance showStacCollection :: Show StacCollection where
+  show = stringify <<< encodeJson
