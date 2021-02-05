@@ -1,9 +1,14 @@
 module StacLinkType where
 
-import Prelude
-import Data.Argonaut (class DecodeJson, JsonDecodeError(..), toString)
+import Data.Argonaut (class DecodeJson, class EncodeJson, JsonDecodeError(..), encodeJson, toString)
+import Data.Array.NonEmpty (cons', toNonEmpty)
 import Data.Either (Either(..))
+import Data.Generic.Rep (class Generic)
+import Data.Generic.Rep.Show (genericShow)
 import Data.Maybe (Maybe(..))
+import Prelude (class Eq, class Show, pure, ($), (<$>), (<<<))
+import Test.QuickCheck (class Arbitrary, arbitrary)
+import Test.QuickCheck.Gen (oneOf)
 
 data StacLinkType
   = Self
@@ -29,6 +34,13 @@ data StacLinkType
   | DerivedFrom
   | VendorLinkType String
 
+derive instance eqStacLinkType :: Eq StacLinkType
+
+derive instance genericStacLinkType :: Generic StacLinkType _
+
+instance showStacLinkType :: Show StacLinkType where
+  show = genericShow
+
 instance decodeStacLinkType :: DecodeJson StacLinkType where
   decodeJson js = case toString js of
     Just "self" -> Right Self
@@ -51,6 +63,64 @@ instance decodeStacLinkType :: DecodeJson StacLinkType where
     Just "latest-version" -> Right LatestVersion
     Just "predecessor-version" -> Right PredecessorVersion
     Just "successor-version" -> Right SuccessorVersion
-    Just "derived_from" -> Right DerivedFrom
+    Just "derived-from" -> Right DerivedFrom
     Just s -> (Right <<< VendorLinkType) s
     Nothing -> (Left <<< UnexpectedValue) js
+
+instance encodeStacLinkType :: EncodeJson StacLinkType where
+  encodeJson stacLinkType =
+    encodeJson
+      $ case stacLinkType of
+          Self -> "self"
+          StacRoot -> "root"
+          Parent -> "parent"
+          Child -> "child"
+          Item -> "item"
+          Items -> "items"
+          Source -> "source"
+          Collection -> "collection"
+          License -> "license"
+          Alternate -> "alternate"
+          DescribedBy -> "describedBy"
+          Next -> "next"
+          Prev -> "prev"
+          ServiceDesc -> "service-desc"
+          ServiceDoc -> "service-doc"
+          Conformance -> "conformance"
+          Data -> "data"
+          LatestVersion -> "latest-version"
+          PredecessorVersion -> "predecessor-version"
+          SuccessorVersion -> "successor-version"
+          DerivedFrom -> "derived-from"
+          VendorLinkType s -> s
+
+instance arbitraryStacLinkType :: Arbitrary StacLinkType where
+  arbitrary =
+    oneOf
+      $ toNonEmpty
+      $ (VendorLinkType <$> arbitrary)
+          `cons'`
+            ( pure
+                <$> [ Self
+                  , StacRoot
+                  , Parent
+                  , Child
+                  , Item
+                  , Items
+                  , Source
+                  , Collection
+                  , License
+                  , Alternate
+                  , DescribedBy
+                  , Next
+                  , Prev
+                  , ServiceDesc
+                  , ServiceDoc
+                  , Conformance
+                  , Data
+                  , LatestVersion
+                  , PredecessorVersion
+                  , SuccessorVersion
+                  , DerivedFrom
+                  ]
+            )
