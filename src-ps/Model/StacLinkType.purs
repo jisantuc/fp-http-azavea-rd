@@ -1,4 +1,4 @@
-module StacLinkType where
+module Model.StacLinkType where
 
 import Data.Argonaut (class DecodeJson, class EncodeJson, JsonDecodeError(..), encodeJson, toString)
 import Data.Array.NonEmpty (cons', toNonEmpty)
