@@ -1,4 +1,4 @@
-module JsonDate (JsonDate(..), fromString) where
+module Model.JsonDate (JsonDate(..), fromString) where
 
 import Data.Argonaut (class DecodeJson, class EncodeJson, JsonDecodeError(..), encodeJson, toString)
 import Data.Array (foldl, snoc, uncons)
