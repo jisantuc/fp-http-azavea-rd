@@ -4,7 +4,8 @@ You can edit this file as you like.
 -}
 { name = "ps-stac"
 , dependencies =
-  [ "affjax"
+  [ "aff-promise"
+  , "affjax"
   , "argonaut"
   , "console"
   , "datetime"

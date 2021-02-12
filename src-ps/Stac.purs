@@ -1,28 +1,32 @@
 module Stac where
 
-import Affjax (Error(..), Response, defaultRequest)
+import Affjax (Error(..), defaultRequest)
 import Affjax as AX
 import Affjax.ResponseFormat as ResponseFormat
-import Data.Argonaut (Json, JsonDecodeError, decodeJson, printJsonDecodeError)
+import Control.Promise (Promise, fromAff)
+import Data.Argonaut (JsonDecodeError, decodeJson, printJsonDecodeError)
 import Data.Bifunctor (lmap)
-import Data.Either (Either(..))
-import Effect.Aff (Aff)
-import Model.Collection (StacCollection)
-import Prelude (bind, pure, ($), (<<<), (<>))
+import Data.Either (Either)
+import Effect (Effect)
+import Model.CollectionsResponse (CollectionsResponse)
+import Prelude (bind, pure, ($), (<>), (>>=))
 
-adaptError :: JsonDecodeError -> Response Json -> Error
-adaptError jsErr resp =
+adaptError :: JsonDecodeError -> Error
+adaptError jsErr =
   RequestContentError
     ( "Request failed to produce a meaningful response: " <> printJsonDecodeError jsErr
     )
 
-getCollections :: String -> Aff (Either Error (Array StacCollection))
-getCollections apiHost = do
-  resp <-
-    AX.request
-      $ defaultRequest { url = apiHost <> "/collections", responseFormat = ResponseFormat.json }
-  case resp of
-    Left e -> pure $ Left e
-    Right success -> pure $ lmap (\err -> adaptError err success) $ (decodeCollection <<< _.body) success
+getCollections :: String -> Effect (Promise (Either Error CollectionsResponse))
+getCollections apiHost =
+  fromAff
+    $ do
+        result <-
+          AX.request
+            $ defaultRequest { url = apiHost <> "/collections", responseFormat = ResponseFormat.json }
+        pure $ result
+          >>= ( \response ->
+                lmap adaptError $ decodeCollections response.body
+            )
   where
-  decodeCollection js = decodeJson js :: Either JsonDecodeError (Array StacCollection)
+  decodeCollections js = decodeJson js :: Either JsonDecodeError CollectionsResponse

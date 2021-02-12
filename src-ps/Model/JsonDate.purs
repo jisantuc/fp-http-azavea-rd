@@ -1,5 +1,6 @@
 module Model.JsonDate (JsonDate(..), fromString) where
 
+import Control.Alt ((<|>))
 import Data.Argonaut (class DecodeJson, class EncodeJson, JsonDecodeError(..), encodeJson, toString)
 import Data.Array (foldl, snoc, uncons)
 import Data.Bifunctor (lmap)
@@ -41,10 +42,16 @@ adaptParseError :: String -> JsonDecodeError
 adaptParseError s = TypeMismatch $ "String should match YYYY-MM-DDTHH:mm:SS format: " <> s
 
 fromString :: String -> Either String JsonDate
-fromString s = JsonDate <$> (unformat dateFormat <<< dropTz) s
+fromString s =
+  let
+    withMillisTest = JsonDate <$> (unformat dateFormatWithMillis <<< dropTz) s
 
-dateFormat :: Formatter
-dateFormat =
+    withoutMillisTest = JsonDate <$> (unformat dateFormatWithoutMillis <<< dropTz) s
+  in
+    withMillisTest <|> withoutMillisTest
+
+dateFormatWithoutMillis :: Formatter
+dateFormatWithoutMillis =
   ( YearFull
       : (Placeholder "-")
       : MonthTwoDigits
@@ -56,10 +63,15 @@ dateFormat =
       : MinutesTwoDigits
       : (Placeholder ":")
       : SecondsTwoDigits
-      : (Placeholder ".")
-      : Milliseconds
       : Nil
   )
+
+dateFormatWithMillis :: Formatter
+dateFormatWithMillis =
+  dateFormatWithoutMillis
+    <> ( (Placeholder ".") : Milliseconds
+          : Nil
+      )
 
 instance decodeJsonDate :: DecodeJson JsonDate where
   decodeJson js = case toString js of
@@ -67,4 +79,4 @@ instance decodeJsonDate :: DecodeJson JsonDate where
     Nothing -> Left $ UnexpectedValue js
 
 instance encodeJsonDate :: EncodeJson JsonDate where
-  encodeJson (JsonDate dt) = encodeJson $ format dateFormat dt
+  encodeJson (JsonDate dt) = encodeJson $ format dateFormatWithMillis dt
